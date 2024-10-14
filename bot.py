@@ -150,7 +150,7 @@ async def announce(ctx, day: int, month: int, time: str, message: str, roles: st
 
         events[event_id] = {
             "time": event_time,
-            "channel": target_channel.id,
+            "channel": target_channel.id,   
             "user": ctx.user.name,
             "message": message,
             "roles": role_ids,
@@ -304,19 +304,3 @@ async def time(ctx):
 
 
 bot.run(TOKEN)
-
-
-
-
-
-
-# //Mentions, roles, meeting events, delete events
-# //5 minute before, 30 minutes, and 2 hours before
-# //Commands that lists all upcoming meetings
-
-# //Token from enviromental variables
-#     -Make sure to ingore env file when uploading
-
-# //Only client event should be for making events
-
-# //Blueprint Announcments
