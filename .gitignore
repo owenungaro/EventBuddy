@@ -6,3 +6,4 @@
 
 # Ignore the temporary directory
 temp/
+events.json

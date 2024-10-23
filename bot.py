@@ -19,6 +19,7 @@ import pdb
 #Make events canceled without deleting
 #Make all of the parameters of edit anouncement non mandatory besides name.
 # - Brainstorm this one, make sure it can work with roles
+#testing
 
 
 #Recreate repo at blueprint github
@@ -28,7 +29,7 @@ import pdb
 load_dotenv()
 
 TOKEN = os.environ.get("TOKEN_KEY")
-JSON_FILE_PATH = os.environ.get("JSON_FILE")
+JSON_FILE_PATH = os.environ.get("JSON_FILE", "events.json")
 
 intents = discord.Intents.default()
 bot = discord.Bot(intents = intents)
@@ -136,7 +137,7 @@ async def schedule_reminder(event_time, channel, message, role_ids, repeat):
 
 
 @bot.slash_command(name="announce", description="Schedule an event and get reminders periodically before event occurs.")
-async def makeAnnouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str = "none", channel: discord.TextChannel = None, repeat: bool = False):
+async def makeannouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str = "none", channel: discord.TextChannel = None, repeat: bool = False):
     #print(events)
     await ctx.respond("Processing your request...")
     try:
@@ -161,7 +162,7 @@ async def makeAnnouncement(ctx, name: str, day: int, month: int, time: str, mess
 
         events[name] = {
             "time": event_time,
-            "channel": target_channel.id,   
+            "channel": target_channel.id,
             "user": ctx.user.name,
             "message": message,
             "roles": role_ids,
@@ -179,7 +180,7 @@ async def makeAnnouncement(ctx, name: str, day: int, month: int, time: str, mess
     
 
 @bot.slash_command(description="Deletes event.")
-async def deleteAnnouncement(ctx, event_name: str):
+async def deleteannouncement(ctx, event_name: str):
     await ctx.respond("Processing your request...")
     if event_name in events:
         del events[event_name]
@@ -190,7 +191,7 @@ async def deleteAnnouncement(ctx, event_name: str):
 
 
 @bot.slash_command(description="Edits event.")
-async def editAnnouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str="none", channel_id: str = None, repeat: bool = False):
+async def editannouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str="none", channel_id: str = None, repeat: bool = False):
     await ctx.respond("Processing your request...")
 
     if name in events:
@@ -232,7 +233,7 @@ async def editAnnouncement(ctx, name: str, day: int, month: int, time: str, mess
 
 
 @bot.slash_command(description="Lists all upcoming events.")
-async def listAnnouncements(ctx):
+async def listannouncements(ctx):
     await ctx.respond("Processing your request...")
     if not events:
         await ctx.send("There are no scheduled events.")
@@ -308,7 +309,6 @@ async def ping(ctx):
 @bot.command(description="Gives time.")
 async def time(ctx):
     await ctx.respond(datetime.now(pytz.timezone('America/New_York')))
-
 
 bot.run(TOKEN)
 
