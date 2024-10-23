@@ -11,9 +11,6 @@ import pdb
 
 #TODO
 #Remake repo to get rid of .vscode and __pycashe_
-#Take out America/New_York and make it a global variable called TZ
-# - Make it read from an optional enviromental variable that defaults to NYC
-#Make JSON_FILE_PATH enviromental variable, default to events.json if unset
 #Change the correct usage edge case (it only has the timing)
 #Make events canceled without deleting
 #Make all of the parameters of edit anouncement non mandatory besides name.
@@ -176,7 +173,11 @@ async def makeannouncement(ctx, name: str, day: int, month: int, time: str, mess
         await schedule_reminder(event_time, ctx.channel, message, role_ids, repeat)
 
     except ValueError:
-        await ctx.send("Invalid input. Please use the format: `/announce day month hour:minute`")
+        await ctx.send(
+            "Invalid input! Please ensure you are using the correct format:\n"
+            "`/makeannouncement name day month hour:minute message roles(optional) channel(optional) repeat(optional)`\n"
+            "For example: `/makeannouncement Meeting 25 12 14:30 'Team update' @role #general True`.")
+
     
 
 @bot.slash_command(description="Deletes event.")
@@ -225,7 +226,14 @@ async def editannouncement(ctx, name: str, day: int, month: int, time: str, mess
 
             await ctx.send(f"Event **{event_name}** has been updated to *{event_time.strftime('%Y-%m-%d %H:%M %Z')}*")
         except:
-            await ctx.send(f"Invalid input. Please use the format: `hour:minute` in military time.")
+            await ctx.send(
+            "Invalid input! Please use the correct format:\n"
+            "`/editannouncement name day month hour:minute message roles channel repeat`\n"
+            "- Time should be in 24-hour military time (e.g., `14:30` for 2:30 PM).\n"
+            "- Ensure the `roles` field is correctly formatted if you are including roles.\n"
+        )
+
+
 
         save_events()
     else:

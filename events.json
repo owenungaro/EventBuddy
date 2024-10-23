@@ -1,1 +1,10 @@
-{}
+{
+    "hi": {
+        "time": "2024-12-12T12:12:00-04:56",
+        "channel": 1296350270586093639,
+        "user": "sargentdelta",
+        "message": "applke",
+        "roles": [],
+        "repeat": false
+    }
+}
