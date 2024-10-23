@@ -10,16 +10,15 @@ import uuid #Unique IDs
 import pdb
 
 #TODO
-#Make UUID a mandatory parameter for announce - FINISHED
-#Make roles a non-mandatory parameter for announce
 #change /announce to /makeAnnouncement , same with /editAnnouncement (make the Announcement capital)
 #Remake repo to get rid of .vscode and __pycashe_
 #Take out America/NEw_York and make it a global variable called TZ
 # - Make it read from an optional enviromental variable that defaults to NYC
 #Make JSON_FILE_PATH enviromental variable, default to events.json if unset
 #Change the correct usage edge case (it only has the timing)
-#Make events canceled with deleting
-#When announcements are edited with mentions, <@& and > is kept in the mention
+#Make events canceled without deleting
+#Make all of the parameters of edit anouncement non mandatory besides name.
+# - Brainstorm this one, make sure it can work with roles
 
 
 #Recreate repo at blueprint github
@@ -137,7 +136,7 @@ async def schedule_reminder(event_time, channel, message, role_ids, repeat):
 
 
 @bot.slash_command(name="announce", description="Schedule an event and get reminders periodically before event occurs.")
-async def announce(ctx, name: str, day: int, month: int, time: str, message: str, roles: str = "none", channel: discord.TextChannel = None, repeat: bool = False):
+async def makeAnnouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str = "none", channel: discord.TextChannel = None, repeat: bool = False):
     #print(events)
     await ctx.respond("Processing your request...")
     try:
@@ -180,7 +179,7 @@ async def announce(ctx, name: str, day: int, month: int, time: str, message: str
     
 
 @bot.slash_command(description="Deletes event.")
-async def deleteannouncement(ctx, event_name: str):
+async def deleteAnnouncement(ctx, event_name: str):
     await ctx.respond("Processing your request...")
     if event_name in events:
         del events[event_name]
@@ -191,7 +190,7 @@ async def deleteannouncement(ctx, event_name: str):
 
 
 @bot.slash_command(description="Edits event.")
-async def editannouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str="none", channel_id: str = None, repeat: bool = False):
+async def editAnnouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str="none", channel_id: str = None, repeat: bool = False):
     await ctx.respond("Processing your request...")
 
     if name in events:
@@ -207,7 +206,7 @@ async def editannouncement(ctx, name: str, day: int, month: int, time: str, mess
             event_name = name
 
             role_ids = [role_id[3:-1] for role_id in roles.split() if role_id.startswith("<@&") and role_id.endswith(">")] if roles != "none" else []
-            
+
 
             events[event_name]["time"] = event_time
             events[event_name]["message"] = message
@@ -233,7 +232,7 @@ async def editannouncement(ctx, name: str, day: int, month: int, time: str, mess
 
 
 @bot.slash_command(description="Lists all upcoming events.")
-async def listannouncements(ctx):
+async def listAnnouncements(ctx):
     await ctx.respond("Processing your request...")
     if not events:
         await ctx.send("There are no scheduled events.")
