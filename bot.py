@@ -10,9 +10,8 @@ import uuid #Unique IDs
 import pdb
 
 #TODO
-#change /announce to /makeAnnouncement , same with /editAnnouncement (make the Announcement capital)
 #Remake repo to get rid of .vscode and __pycashe_
-#Take out America/NEw_York and make it a global variable called TZ
+#Take out America/New_York and make it a global variable called TZ
 # - Make it read from an optional enviromental variable that defaults to NYC
 #Make JSON_FILE_PATH enviromental variable, default to events.json if unset
 #Change the correct usage edge case (it only has the timing)
@@ -30,6 +29,7 @@ load_dotenv()
 
 TOKEN = os.environ.get("TOKEN_KEY")
 JSON_FILE_PATH = os.environ.get("JSON_FILE", "events.json")
+TIMEZONE = os.environ.get("TIMEZONE", "America/New_York")
 
 intents = discord.Intents.default()
 bot = discord.Bot(intents = intents)
@@ -43,7 +43,7 @@ def load_events():
             #event_details takes in dictionary of the details
             for event_id, event_details in loaded_events.items():
                 #Converts iso formatted date back into datetime object with timezone
-                event_details["time"] = datetime.fromisoformat(event_details["time"]).replace(tzinfo=pytz.timezone("America/New_York"))
+                event_details["time"] = datetime.fromisoformat(event_details["time"]).replace(tzinfo=pytz.timezone(TIMEZONE))
             print("finished load")
             return loaded_events
     except(FileNotFoundError, json.JSONDecodeError):
@@ -90,7 +90,7 @@ async def send_reminder(channel, message):
 async def schedule_reminder(event_time, channel, message, role_ids, repeat):
     reminders = calculate_reminders(event_time)
 
-    now = datetime.now(pytz.timezone('America/New_York'))
+    now = datetime.now(pytz.timezone(TIMEZONE))
 
     role_mentions = " "
     formatted_role_mentions = []
@@ -142,7 +142,7 @@ async def makeannouncement(ctx, name: str, day: int, month: int, time: str, mess
     await ctx.respond("Processing your request...")
     try:
         hour, minute = map(int, time.split(":"))
-        timezone = pytz.timezone('America/New_York')
+        timezone = pytz.timezone(TIMEZONE)
         now = datetime.now(timezone)
         
         event_time = timezone.localize(datetime(year=now.year, month=month, day=day, hour=hour, minute=minute))
@@ -197,7 +197,7 @@ async def editannouncement(ctx, name: str, day: int, month: int, time: str, mess
     if name in events:
         try:
             hour, minute = map(int, time.split(":"))
-            timezone = pytz.timezone("America/New_York")
+            timezone = pytz.timezone(TIMEZONE)
             now = datetime.now(timezone)
             event_time = timezone.localize(datetime(year=now.year, month=month, day=day, hour=hour, minute=minute))
 
@@ -269,7 +269,7 @@ async def on_ready():
 
     for event_id, event_details in events.items():
         event_time = event_details["time"]
-        now = datetime.now(pytz.timezone('America/New_York'))
+        now = datetime.now(pytz.timezone(TIMEZONE))
 
         if event_time > now:
             channel = bot.get_channel(event_details["channel"])
@@ -280,7 +280,7 @@ async def on_ready():
 
 
 async def cleanup_past_events():
-    now = datetime.now(pytz.timezone('America/New_York'))
+    now = datetime.now(pytz.timezone(TIMEZONE))
     events_to_remove = []
     
     for event_id, event_details in events.items():
@@ -308,7 +308,7 @@ async def ping(ctx):
 
 @bot.command(description="Gives time.")
 async def time(ctx):
-    await ctx.respond(datetime.now(pytz.timezone('America/New_York')))
+    await ctx.respond(datetime.now(pytz.timezone(TIMEZONE)))
 
 bot.run(TOKEN)
 
