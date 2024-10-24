@@ -11,15 +11,21 @@ import pdb
 
 #TODO
 #Remake repo to get rid of .vscode and __pycashe_
-#Change the correct usage edge case (it only has the timing)
 #Make events canceled without deleting
 #Make all of the parameters of edit anouncement non mandatory besides name.
 # - Brainstorm this one, make sure it can work with roles
 #testing
+#Change the repeat announcement when an repeatable event passes (it makes a new ID from the old ID system)
+#Update list announcements, it should also show repeat and skip(only if repeat is active)
+#Make randomized id for the end of the name
+#Finish create task 
+#Fix space in front of the first event in listevents
+#If an announcement is not repeating and you cancel, prints the right message but still trys to cancel it
+#Make editannouncement parameters, non mandatory
 
 
 #Recreate repo at blueprint github
-#Change announcement times: 1hr, 30m, morning, 9
+#Change announcement times: 1hr, 30m, morning: 9 AM
 
 
 load_dotenv()
@@ -60,7 +66,8 @@ def save_events():
             "user": event_details["user"],
             "message": event_details["message"],
             "roles": event_details.get("roles", []),
-            "repeat": event_details.get("repeat", False)
+            "repeat": event_details.get("repeat", False),
+            "skip": event_details.get("skip", False)
         }
         for event_name, event_details in events.items()
 
@@ -80,14 +87,21 @@ def calculate_reminders(event_time):
         "five_minutes": event_time-timedelta(minutes=5)
     }
 
-async def send_reminder(channel, message):
-    await channel.send(message)
+
+async def send_reminder(channel, message, eventID):
+    if eventID in events:
+        await channel.send(message)
 
 
-async def schedule_reminder(event_time, channel, message, role_ids, repeat):
+def schedule_reminder(event_name, event_time, channel, message, role_ids, repeat):
     reminders = calculate_reminders(event_time)
-
     now = datetime.now(pytz.timezone(TIMEZONE))
+
+    if event_time < now:
+        events[event_name]["time"] = event_time + timedelta(weeks=1)
+        save_events()
+        asyncio.run(channel.send(f"Event **{event_name}** is canceled for this week. It will occur next on {events[event_name]['time'].strftime('%Y-%m-%d %H:%M %Z')}."))
+        return
 
     role_mentions = " "
     formatted_role_mentions = []
@@ -96,44 +110,36 @@ async def schedule_reminder(event_time, channel, message, role_ids, repeat):
         formatted_role_mentions.append(mention_string)
     role_mentions = ", ".join(formatted_role_mentions)
 
+    asyncLoop = asyncio.get_event_loop()
+    if not asyncLoop.is_running():
+        asyncLoop.run_forever()
+
     #Two hour announcement
     two_hour_announcement = (reminders['two_hours'] - now).total_seconds()
     if two_hour_announcement > 0:
-        await asyncio.sleep(two_hour_announcement)
-        await send_reminder(channel, f"{message} {role_mentions}")
+        asyncLoop.call_later(two_hour_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
 
     #Twenty minute announcement
     twenty_minute_announcement = (reminders['twenty_minutes'] - now).total_seconds()
     if twenty_minute_announcement > 0:
-        await asyncio.sleep(twenty_minute_announcement)
-        await send_reminder(channel, f"{message} {role_mentions}")
+        asyncLoop.call_later(twenty_minute_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
 
     #Five minute announcement
     five_minute_announcement = (reminders['five_minutes'] - now).total_seconds()
     if five_minute_announcement > 0:
-        await asyncio.sleep(five_minute_announcement)
-        await send_reminder(channel, f"{message} {role_mentions}")
+        asyncLoop.call_later(five_minute_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
 
     if repeat:
         next_event_time = event_time + timedelta(weeks=1) #Gets the time for next week
-        event_name = f"{channel.id}_{next_event_time.timestamp()}_{uuid.uuid4()}" #Makes new id for event
-
-        events[event_name] = {
-            "time": next_event_time,
-            "channel": channel.id,
-            "user": "bot",
-            "message": message,
-            "roles": role_ids,
-            "repeat": repeat
-        }
+        events[event_name]["time"] = next_event_time
         save_events()
         
-        print(f"Repeating event scheduled for {next_event_time.strftime('%Y-%m-%d %H:%M %Z')}") ##FIX
+        print(f"Repeating event scheduled for {next_event_time.strftime('%Y-%m-%d %H:%M %Z')}") 
 
         
 
 
-@bot.slash_command(name="announce", description="Schedule an event and get reminders periodically before event occurs.")
+@bot.slash_command(name="makeannouncement", description="Schedule an event and get reminders periodically before event occurs.")
 async def makeannouncement(ctx, name: str, day: int, month: int, time: str, message: str, roles: str = "none", channel: discord.TextChannel = None, repeat: bool = False):
     #print(events)
     await ctx.respond("Processing your request...")
@@ -168,9 +174,9 @@ async def makeannouncement(ctx, name: str, day: int, month: int, time: str, mess
 
         save_events()
         
-        await ctx.send(f"Event **[{name}]** scheduled for *{event_time.strftime('%Y-%m-%d %H:%M %Z')}*.")
+        await ctx.send(f"Event **{name}** scheduled for *{event_time.strftime('%Y-%m-%d %H:%M %Z')}*.")
         
-        await schedule_reminder(event_time, ctx.channel, message, role_ids, repeat)
+        schedule_reminder(name, event_time, ctx.channel, message, role_ids, repeat)
 
     except ValueError:
         await ctx.send(
@@ -178,7 +184,6 @@ async def makeannouncement(ctx, name: str, day: int, month: int, time: str, mess
             "`/makeannouncement name day month hour:minute message roles(optional) channel(optional) repeat(optional)`\n"
             "For example: `/makeannouncement Meeting 25 12 14:30 'Team update' @role #general True`.")
 
-    
 
 @bot.slash_command(description="Deletes event.")
 async def deleteannouncement(ctx, event_name: str):
@@ -247,6 +252,7 @@ async def listannouncements(ctx):
         await ctx.send("There are no scheduled events.")
         return
     
+    cleanup_past_events()
     event_list = []
     for event_name, event_details in events.items():
         event_time = event_details["time"].strftime('%Y-%m-%d %H:%M %Z')
@@ -269,6 +275,32 @@ async def listannouncements(ctx):
     await ctx.send(f"Scheduled Events:\n {message}")
 
 
+@bot.slash_command(description="Cancels schedueled announcement for a week")
+async def cancelannouncement(ctx, name: str):
+    if name in events:
+        try:
+            if events[name].get("repeat", False):
+                await ctx.send(f"Event **{name}** is not a repeating event.")
+                return
+            
+            if events[name].get("skip_this_week", False):
+                await ctx.send(f"Event **{name}** has already been canceled for this week.")
+                return
+
+
+            
+            events[name]["skip"] = True
+            save_events()
+
+            await ctx.send(f"Event **{name}** will be skipped for this week.")
+
+        except KeyError:
+            await ctx.send(f"Event **{name}** does not exist")
+    else:
+        await ctx.send(f"Event **{name}** does not exist")
+
+
+
 @bot.event
 async def on_ready():
     print(f'{bot.user} is now running.')
@@ -279,15 +311,27 @@ async def on_ready():
         event_time = event_details["time"]
         now = datetime.now(pytz.timezone(TIMEZONE))
 
-        if event_time > now:
-            channel = bot.get_channel(event_details["channel"])
+        # Check if the event time has already passed for this week
+        if event_time < now:
+            # Update event time to the next week
+            events[event_id]["time"] = event_time + timedelta(weeks=1)
+            save_events()  # Save the updated event details
+            print(f"Event {event_id} has passed. Rescheduled to {events[event_id]['time'].strftime('%Y-%m-%d %H:%M %Z')}.")
+            continue  # Skip to the next event
+
+        # Proceed to schedule reminders for future events
+        channel = bot.get_channel(event_details["channel"])
+        if channel is not None: 
             role_ids = event_details.get("roles", [])
-            asyncio.create_task(schedule_reminder(event_time, channel, event_details["message"], role_ids, event_details.get("repeat", False)))
+            message = event_details["message"]
+            repeat = event_details.get("repeat", False)
+
+            # Schedule the reminder
+            schedule_reminder(event_id, event_time, channel, message, role_ids, repeat)
         else:
-            print(f"Event {event_id} has passed.")
+            print(f"Channel with ID {event_details['channel']} not found for event {event_id}.")
 
-
-async def cleanup_past_events():
+def cleanup_past_events():
     now = datetime.now(pytz.timezone(TIMEZONE))
     events_to_remove = []
     
@@ -299,13 +343,12 @@ async def cleanup_past_events():
         del events[event_id]
         print(f"Deleted past event {event_id}.")
 
-    save_events()
-
 
 async def periodic_cleanup():
     while True:
-        await asyncio.sleep(3600)  #Wait for one hour
-        await cleanup_past_events()
+        await asyncio.sleep(300)  #Wait for 5 minutes
+        cleanup_past_events()
+        save_events()
 
 
 
