@@ -22,6 +22,7 @@ import pdb
 #Fix space in front of the first event in listevents
 #If an announcement is not repeating and you cancel, prints the right message but still trys to cancel it
 #Make editannouncement parameters, non mandatory
+#edit announcement just says processing request if all inputs are wrong (test more)
 
 
 #Recreate repo at blueprint github
@@ -58,7 +59,7 @@ events = load_events()
 
 
 def save_events():
-    print(f"Saving, {events}")
+    print(f"Saving, {events.keys()}")
     saved_events = {
         event_name: {
             "time": event_details["time"].isoformat(),
@@ -82,9 +83,9 @@ def save_events():
 
 def calculate_reminders(event_time):
     return {
-        "two_hours": event_time-timedelta(hours=2),
-        "twenty_minutes": event_time-timedelta(minutes=20),
-        "five_minutes": event_time-timedelta(minutes=5)
+        "first_announcement": event_time-timedelta(minutes=3),
+        "second_announcement": event_time-timedelta(minutes=2),
+        "third_announcement": event_time-timedelta(minutes=1)
     }
 
 
@@ -99,6 +100,7 @@ def schedule_reminder(event_name, event_time, channel, message, role_ids, repeat
 
     if event_time < now:
         events[event_name]["time"] = event_time + timedelta(weeks=1)
+        events[event_name]["skip"] = False
         save_events()
         asyncio.run(channel.send(f"Event **{event_name}** is canceled for this week. It will occur next on {events[event_name]['time'].strftime('%Y-%m-%d %H:%M %Z')}."))
         return
@@ -115,28 +117,35 @@ def schedule_reminder(event_name, event_time, channel, message, role_ids, repeat
         asyncLoop.run_forever()
 
     #Two hour announcement
-    two_hour_announcement = (reminders['two_hours'] - now).total_seconds()
-    if two_hour_announcement > 0:
-        asyncLoop.call_later(two_hour_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
+    first_announcement = (reminders['first_announcement'] - now).total_seconds()
+    if first_announcement > 0:
+        asyncLoop.call_later(first_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
 
     #Twenty minute announcement
-    twenty_minute_announcement = (reminders['twenty_minutes'] - now).total_seconds()
-    if twenty_minute_announcement > 0:
-        asyncLoop.call_later(twenty_minute_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
+    second_announcement = (reminders['second_announcement'] - now).total_seconds()
+    if second_announcement > 0:
+        asyncLoop.call_later(second_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
 
     #Five minute announcement
-    five_minute_announcement = (reminders['five_minutes'] - now).total_seconds()
-    if five_minute_announcement > 0:
-        asyncLoop.call_later(five_minute_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
+    third_announcement = (reminders['third_announcement'] - now).total_seconds()
+    if third_announcement > 0:
+        asyncLoop.call_later(third_announcement, asyncio.create_task, send_reminder(channel, f"{message} {role_mentions}", event_name))
 
     if repeat:
-        next_event_time = event_time + timedelta(weeks=1) #Gets the time for next week
-        events[event_name]["time"] = next_event_time
-        save_events()
-        
-        print(f"Repeating event scheduled for {next_event_time.strftime('%Y-%m-%d %H:%M %Z')}") 
+        asyncLoop.call_later(third_announcement, rescheduleAnnouncement, event_name, event_time)
 
-        
+    
+
+def rescheduleAnnouncement(event_name, event_time):
+    next_event_time = event_time + timedelta(weeks=1) #Gets the time for next week
+    events[event_name]["time"] = next_event_time
+
+    if events[event_name]["skip"] == True:
+        events[event_name]["skip"] = False
+
+    save_events()
+    
+    print(f"Repeating event scheduled for {next_event_time.strftime('%Y-%m-%d %H:%M %Z')}")
 
 
 @bot.slash_command(name="makeannouncement", description="Schedule an event and get reminders periodically before event occurs.")
@@ -169,7 +178,8 @@ async def makeannouncement(ctx, name: str, day: int, month: int, time: str, mess
             "user": ctx.user.name,
             "message": message,
             "roles": role_ids,
-            "repeat": repeat
+            "repeat": repeat,
+            "skip": False
         }
 
         save_events()
@@ -277,13 +287,14 @@ async def listannouncements(ctx):
 
 @bot.slash_command(description="Cancels schedueled announcement for a week")
 async def cancelannouncement(ctx, name: str):
+    await ctx.respond("Processing your request...")
     if name in events:
         try:
-            if events[name].get("repeat", False):
+            if events[name]["repeat"] == False:
                 await ctx.send(f"Event **{name}** is not a repeating event.")
                 return
             
-            if events[name].get("skip_this_week", False):
+            if events[name]["skip"] == True:
                 await ctx.send(f"Event **{name}** has already been canceled for this week.")
                 return
 
@@ -291,20 +302,34 @@ async def cancelannouncement(ctx, name: str):
             
             events[name]["skip"] = True
             save_events()
-
             await ctx.send(f"Event **{name}** will be skipped for this week.")
 
-        except KeyError:
-            await ctx.send(f"Event **{name}** does not exist")
+        except KeyError as error:
+            await ctx.send(f"Error: {error}")
+        except Exception as e:
+            await ctx.send(f"Unexpected error: {e}")
     else:
         await ctx.send(f"Event **{name}** does not exist")
 
+@bot.slash_command(name="time", description="Get the current time in the specified timezone.")
+async def time(ctx, timezone: str = TIMEZONE):
+    await ctx.respond("Fetching current time...")
+    try:
+        tz = pytz.timezone(timezone)
+        now = datetime.now(tz)
+        
+        current_time = now.strftime('%Y-%m-%d %H:%M %Z')
+        
+        await ctx.send(f"The current time in {timezone} is {current_time}.")
+    except pytz.UnknownTimeZoneError:
+        await ctx.send(f"Error: '{timezone}' is not a recognized timezone. Please provide a valid timezone.")
 
 
 @bot.event
 async def on_ready():
     print(f'{bot.user} is now running.')
 
+    # asyncio.loop
     asyncio.create_task(periodic_cleanup())
 
     for event_id, event_details in events.items():
@@ -331,6 +356,7 @@ async def on_ready():
         else:
             print(f"Channel with ID {event_details['channel']} not found for event {event_id}.")
 
+
 def cleanup_past_events():
     now = datetime.now(pytz.timezone(TIMEZONE))
     events_to_remove = []
@@ -346,9 +372,9 @@ def cleanup_past_events():
 
 async def periodic_cleanup():
     while True:
-        await asyncio.sleep(300)  #Wait for 5 minutes
         cleanup_past_events()
         save_events()
+        await asyncio.sleep(1800)  #Wait for 30 minutes
 
 
 
@@ -356,10 +382,6 @@ async def periodic_cleanup():
 async def ping(ctx):
     await ctx.respond(f"Latency is {bot.latency}")
 
-
-@bot.command(description="Gives time.")
-async def time(ctx):
-    await ctx.respond(datetime.now(pytz.timezone(TIMEZONE)))
 
 bot.run(TOKEN)
 
@@ -377,4 +399,4 @@ bot.run(TOKEN)
 
 # //Only client event should be for making events
 
-# //Blueprint Announcments
+# //Blueprint Announcments 
