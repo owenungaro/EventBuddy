@@ -9,4 +9,6 @@ temp/
 
 #Ignore events.json
 events.json
-events.json
+
+#Ignore all .json files (may change in future if needed)
+*.json
